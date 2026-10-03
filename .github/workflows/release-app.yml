@@ -1,0 +1,45 @@
+name: release app
+
+# Builds the Simorgh macOS app from the current tag and ships it as a DMG.
+# The engine binary is NOT compiled here: it is downloaded from the latest
+# HELBOYCODER/simorgh-core release (SimorghEngine-macOS-universal.tar.gz),
+# which is built and notarization-ready from its own `engine-v*` tags.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: fetch the engine binary from simorgh-core's latest release
+        run: |
+          set -euo pipefail
+          gh release download --repo HELBOYCODER/simorgh-core --pattern 'SimorghEngine-macOS-universal.tar.gz' --dir /tmp/engine
+          mkdir -p /tmp/engine/x && tar -xzf /tmp/engine/SimorghEngine-macOS-universal.tar.gz -C /tmp/engine/x
+          mkdir -p vendor
+          find /tmp/engine/x -name simorghd -type f -exec cp {} vendor/simorghd \; -exec chmod 755 {} \;
+          chmod 755 vendor/simorghd
+          file vendor/simorghd
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: build the universal DMG
+        run: ./gradlew --no-daemon packageUniversalDmg
+      - name: publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/compose/binaries/main-universal/dmg/*.dmg
+          body: |
+            Simorgh برای macOS (Universal: Apple Silicon + Intel).
+            دانلود کنید، باز کنید، «اتصال» را بزنید.
+            First launch: right-click → Open (the app is ad-hoc signed, not notarized).

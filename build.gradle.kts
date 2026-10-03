@@ -53,6 +53,11 @@ compose.desktop {
         mainClass = "com.simorgh.mac.MainKt"
 
         nativeDistributions {
+            modules(
+                "java.base", "java.desktop", "java.logging", "java.management",
+                "java.naming", "java.net.http", "java.sql", "jdk.unsupported",
+                "jdk.crypto.ec",
+            )
             targetFormats(TargetFormat.Dmg)
             packageName = "Simorgh"
             // Compose Desktop packaging needs MAJOR>0; the product version stays 0.1.0 (BuildConfig).
