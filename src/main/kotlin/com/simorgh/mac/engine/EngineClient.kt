@@ -85,6 +85,9 @@ class EngineClient {
         if (isAlive && port > 0) return
         val binary = Paths.bundledTool("simorghd")
             ?: error("simorghd binary not found (put it in vendor/simorghd)")
+        // Packaging strips the exec bit from app-resources binaries; the bundle
+        // lives on a user-writable volume once installed, so restore it here.
+        runCatching { binary.setExecutable(true, false) }
         withContext(Dispatchers.IO) { startDaemon(binary) }
         restarts = 0
     }
