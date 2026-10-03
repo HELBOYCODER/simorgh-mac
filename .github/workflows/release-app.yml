@@ -33,13 +33,13 @@ jobs:
           file vendor/simorghd
         env:
           GH_TOKEN: ${{ github.token }}
-      - name: build the universal DMG
-        run: ./gradlew --no-daemon packageUniversalDmg
+      - name: build the DMG (Apple Silicon)
+        run: ./gradlew --no-daemon packageDistributionForCurrentOS
       - name: publish
         uses: softprops/action-gh-release@v2
         with:
-          files: build/compose/binaries/main-universal/dmg/*.dmg
+          files: build/compose/binaries/main/dmg/*.dmg
           body: |
-            Simorgh برای macOS (Universal: Apple Silicon + Intel).
+            Simorgh برای macOS (Apple Silicon). نسخه Intel به‌زودی.
             دانلود کنید، باز کنید، «اتصال» را بزنید.
             First launch: right-click → Open (the app is ad-hoc signed, not notarized).
