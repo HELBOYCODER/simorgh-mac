@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.simorgh.mac.str.LocalContext
 import com.simorgh.mac.str.stringResource
 import androidx.compose.ui.semantics.Role
@@ -417,6 +418,187 @@ private fun CheckMark(checked: Boolean) {
     ) {
         if (checked) Icon(ZeroIcons.Check, null, tint = c.onAccent, modifier = Modifier.size(16.dp))
     }
+}
+
+// ------------------------------------------------------------------ apps
+
+@Immutable
+private data class AppEntry(val path: String, val label: String)
+
+/**
+ * The Mac counterpart of Android's PackageManager.queryIntentActivities.
+ * A "launchable app" on macOS is any `.app` bundle under /Applications or
+ * ~/Applications (one level deep, so /Applications/Utilities is covered too).
+ * The label is read from Info.plist, preferring CFBundleDisplayName and
+ * falling back to CFBundleName, then to the bundle file name.
+ */
+private fun loadMacApps(selfPath: String = currentBundlePath()): List<AppEntry> {
+    val roots = listOf(
+        java.io.File("/Applications"),
+        java.io.File(System.getProperty("user.home"), "Applications"),
+    )
+    val out = ArrayList<AppEntry>()
+    val seen = HashSet<String>()
+    fun visit(bundle: java.io.File) {
+        if (!bundle.isDirectory || bundle.extension != "app") return
+        val path = runCatching { bundle.canonicalPath }.getOrElse { bundle.absolutePath }
+        if (!seen.add(path)) return
+        if (path == selfPath) return
+        out += AppEntry(path, readBundleLabel(bundle))
+    }
+    for (root in roots) {
+        root.listFiles()?.forEach { top ->
+            if (top.isDirectory && top.extension == "app") visit(top)
+            else if (top.isDirectory && !top.name.startsWith(".")) {
+                // Utilities/ and vendor folders; skip hidden and system pieces.
+                top.listFiles()?.forEach(::visit)
+            }
+        }
+    }
+    return out.sortedBy { it.label.lowercase() }
+}
+
+/**
+ * XML plists are the norm in .app bundles; a plain regex scan is enough to
+ * pull the two display keys without a full plist parser. Binary plists fail
+ * the read and fall through to the bundle-name default.
+ */
+private fun readBundleLabel(bundle: java.io.File): String {
+    val plist = java.io.File(bundle, "Contents/Info.plist")
+    if (plist.isFile) {
+        val text = runCatching { plist.readText() }.getOrDefault("")
+        for (key in listOf("CFBundleDisplayName", "CFBundleName")) {
+            Regex("<key>$key</key>\\s*<string>([^<]+)</string>").find(text)
+                ?.groupValues?.getOrNull(1)?.let { return decodeXml(it) }
+        }
+    }
+    return bundle.nameWithoutExtension
+}
+
+private fun decodeXml(s: String): String = s
+    .replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    .replace("&quot;", "\"").replace("&apos;", "'")
+
+/** Path of the running Simorgh.app (so the picker does not list itself). */
+private fun currentBundlePath(): String = runCatching {
+    val home = System.getProperty("sun.boot.library.path")?.let { java.io.File(it).parentFile?.parentFile?.path }
+        ?: return@runCatching ""
+    // /path/Simorgh.app/Contents/MacOS → /path/Simorgh.app
+    val idx = home.indexOf(".app/Contents")
+    if (idx <= 0) "" else home.substring(0, idx + 4)
+}.getOrDefault("")
+
+/** Choose which Mac apps go through (or around) the VPN. */
+@Composable
+fun AppPickerSheet(visible: Boolean, s: Settings, actions: SettingsActions, onDismiss: () -> Unit) {
+    val title = stringResource(R.string.settings_choose_apps)
+    ZeroSheet(visible = visible, onDismiss = onDismiss, title = title) {
+        val c = ZeroTheme.colors
+        val apps by produceState<List<AppEntry>?>(null, visible) {
+            if (visible && value == null) value = withContext(Dispatchers.IO) {
+                runCatching { loadMacApps() }.getOrDefault(emptyList())
+            }
+        }
+        var query by rememberSaveable { mutableStateOf("") }
+        val modeBody = stringResource(
+            if (s.appFilter == com.simorgh.mac.model.AppFilterMode.OnlySelected) R.string.apps_body_only else R.string.apps_body_except,
+        )
+        // Same subtitle as Android's sheet, with the honest Mac note appended
+        // when the tunnel helper is the one carrying traffic (all-or-nothing).
+        val subtitle = if (s.mode == com.simorgh.mac.model.ConnectionMode.Vpn)
+            "$modeBody ${stringResource(R.string.apps_mac_note)}" else modeBody
+        SheetHeader(title, subtitle)
+        ZeroTextField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = stringResource(R.string.apps_search),
+            leading = ZeroIcons.Search,
+            clearLabel = stringResource(R.string.action_clear),
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        Spacer(Modifier.height(8.dp))
+        val list = apps
+        if (list == null) {
+            Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+            }
+            return@ZeroSheet
+        }
+        val shown = remember(list, query, s.filteredApps) {
+            val q = query.trim().lowercase()
+            // Selected apps first, so the current choice is visible without scrolling.
+            list.filter { q.isEmpty() || it.label.lowercase().contains(q) || it.path.lowercase().contains(q) }
+                .sortedBy { if (it.path in s.filteredApps) 0 else 1 }
+        }
+        LazyColumn(Modifier.weight(1f, fill = false), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+            items(shown, key = { it.path }, contentType = { "app" }) { app ->
+                val checked = app.path in s.filteredApps
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 60.dp)
+                        .clip(RowShape)
+                        .toggleable(checked, role = Role.Checkbox) { on ->
+                            actions.onChange { st -> st.copy(filteredApps = if (on) st.filteredApps + app.path else st.filteredApps - app.path) }
+                        }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppIcon(app.path)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(app.label, style = MaterialTheme.typography.bodyLarge, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(app.path, style = MaterialTheme.typography.bodySmall, color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    CheckMark(checked)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The bundle's icon, decoded from its Resources folder. ImageIO reads the
+ * PNG case directly; a `.icns` file goes through javax.swing.ImageIcon,
+ * which internally uses the AWT Toolkit's icns decoder shipped with the
+ * macOS JDK.
+ */
+@Composable
+private fun AppIcon(bundlePath: String) {
+    val c = ZeroTheme.colors
+    val icon by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, bundlePath) {
+        value = withContext(Dispatchers.IO) { runCatching { loadAppIcon(bundlePath) }.getOrNull() }
+    }
+    val b = icon
+    if (b != null) {
+        androidx.compose.foundation.Image(b, contentDescription = null, modifier = Modifier.size(36.dp))
+    } else {
+        Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(c.surfaceHi))
+    }
+}
+
+private fun loadAppIcon(bundlePath: String): androidx.compose.ui.graphics.ImageBitmap? {
+    val resources = java.io.File(bundlePath, "Contents/Resources")
+    if (!resources.isDirectory) return null
+    val png = resources.listFiles { f -> f.isFile && f.extension == "png" }?.maxByOrNull { it.length() }
+    val icns = resources.listFiles { f -> f.isFile && f.extension == "icns" }?.maxByOrNull { it.length() }
+    png?.let { file ->
+        runCatching { javax.imageio.ImageIO.read(file) }
+            .getOrNull()?.let { return it.toComposeImageBitmap() }
+    }
+    icns?.let { file ->
+        // javax.imageio does not register an Apple icon reader on this JDK;
+        // ImageIcon → Toolkit does (macOS ships one with the AWT).
+        val image = runCatching { javax.swing.ImageIcon(file.absolutePath) }.getOrNull() ?: return null
+        val w = image.iconWidth; val h = image.iconHeight
+        if (w <= 0 || h <= 0) return null
+        val bi = java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+        val g = bi.createGraphics()
+        image.paintIcon(null, g, 0, 0)
+        g.dispose()
+        return bi.toComposeImageBitmap()
+    }
+    return null
 }
 
 // ------------------------------------------------------------------ licences

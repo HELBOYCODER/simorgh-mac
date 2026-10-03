@@ -107,6 +107,8 @@ data class HomeState(
     val profile: ConnectionProfile = ConnectionProfile.Normal,
     /** How the last WARP connection was made; shown while a WARP account is connected. */
     val race: com.simorgh.mac.model.RaceState = com.simorgh.mac.model.RaceState(),
+    /** True when the root TUN helper is live and traffic is going through utun. */
+    val vpnActive: Boolean = false,
 )
 
 @Composable
@@ -236,7 +238,13 @@ private fun orbStateText(state: HomeState): String {
     val locale = currentLocale()
     return when (val conn = state.conn) {
         ConnState.Idle -> stringResource(R.string.state_disconnected)
-        is ConnState.Connected -> stringResource(R.string.state_connected_to, countryLabel(context, conn.server.country, locale))
+        is ConnState.Connected -> {
+            val base = stringResource(R.string.state_connected_to, countryLabel(context, conn.server.country, locale))
+            // The Android VPN tile in the system bar is the desktop tray's job;
+            // inside the orb we suffix the connected line with a VPN label so
+            // the user can tell the root helper is the one carrying traffic.
+            if (state.vpnActive) "$base · ${stringResource(R.string.settings_mode_vpn)}" else base
+        }
         is ConnState.Failed -> failReasonText(context, conn.reason)
         ConnState.Disconnecting -> stringResource(R.string.stage_disconnecting)
         else -> stringResource(R.string.state_connecting)

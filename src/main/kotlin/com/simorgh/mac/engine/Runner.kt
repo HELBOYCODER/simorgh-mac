@@ -463,13 +463,28 @@ class Runner(
     private suspend fun bringUp(): Boolean = withContext(NonCancellable) {
         val config = buildConfig() ?: return@withContext false
         val s = settings.current
+        // VPN mode: the daemon refuses a tun inbound unless it can open a
+        // utun device (macOS: root). Ask for admin rights once, and after
+        // that every RPC routes to the root helper so the tunnel survives
+        // without a second prompt (docs/rpc-contract.md "stop-file").
+        if (s.mode == ConnectionMode.Vpn && !client.usePrivileged) {
+            val ok = runCatching { client.startPrivilegedHelper() }.getOrDefault(false)
+            if (!ok) {
+                fail(
+                    FailReason.VpnPermission,
+                    "macOS declined the one-time admin prompt: the TUN helper did not start. " +
+                        "Try again or fall back to proxy mode.",
+                )
+                return@withContext false
+            }
+        }
         val err = client.rpc("start", JSONObject().put("config", JSONObject(config)))
             .optString("error").takeIf { it.isNotEmpty() }
         if (err != null) {
             if (err.contains("requires root")) {
                 fail(
                     FailReason.VpnPermission,
-                    "simorghd must run as root for TUN mode: sudo simorghd --data-dir ${com.simorgh.mac.Paths.dataDir.absolutePath}",
+                    "simorghd needs root to open the utun device (stop-file contract at ${client.stopFile.absolutePath})",
                 )
             } else {
                 fail(FailReason.CoreError, err)
@@ -658,6 +673,10 @@ class Runner(
         scope.launch {
             publish(ConnState.Disconnecting)
             if (wasRunning) runCatching { client.rpc("stop", JSONObject()) }
+            // Tunnels down: tell the root helper to exit (no second admin
+            // prompt — see stop-file contract), then bring the unprivileged
+            // child back for discovery jobs on the next proxy session.
+            runCatching { client.stopPrivilegedHelper() }
             teardown()
             publish(ConnState.Idle)
         }

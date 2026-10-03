@@ -37,6 +37,7 @@ object R {
         val app_name: String get() = "app_name"
         val apps_body_except: String get() = "apps_body_except"
         val apps_body_only: String get() = "apps_body_only"
+        val apps_mac_note: String get() = "apps_mac_note"
         val apps_search: String get() = "apps_search"
         val badge_skipped: String get() = "badge_skipped"
         val brand_name: String get() = "brand_name"

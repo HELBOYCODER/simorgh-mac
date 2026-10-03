@@ -111,7 +111,7 @@ import dev.chrisbanes.haze.rememberHazeState
 
 enum class SettingsCardId { Connection, Sources, Split, Share, Evasion, Appearance, Privacy, Diagnostics, About }
 
-enum class SettingsSheet { ConnectionMore, Sources, Countries, Licences, ClearHistory, Diagnostics, Logs }
+enum class SettingsSheet { ConnectionMore, Sources, Countries, Apps, Licences, ClearHistory, Diagnostics, Logs }
 
 @Immutable
 data class SettingsUiState(
@@ -206,7 +206,7 @@ fun SettingsScreen(
                         when (id) {
                             SettingsCardId.Connection -> ConnectionCard(s, q, reconnect, actions) { sheet = SettingsSheet.ConnectionMore }
                             SettingsCardId.Sources -> SourcesCard(state, q, actions, onManage = { sheet = SettingsSheet.Sources }, onCountries = { sheet = SettingsSheet.Countries })
-                            SettingsCardId.Split -> SplitCard(s, q, reconnect, actions)
+                            SettingsCardId.Split -> SplitCard(s, q, reconnect, actions) { sheet = SettingsSheet.Apps }
                             SettingsCardId.Share -> ShareCard(state, q, actions)
                             SettingsCardId.Evasion -> EvasionCard(s, q, reconnect, actions)
                             SettingsCardId.Appearance -> AppearanceCard(state, q, actions)
@@ -228,6 +228,7 @@ fun SettingsScreen(
     ConnectionMoreSheet(sheet == SettingsSheet.ConnectionMore, s, SettingsCardId.Connection in state.reconnectCards, actions) { sheet = null }
     SourcesSheet(sheet == SettingsSheet.Sources, s, state.subscriptions, actions) { sheet = null }
     CountriesSheet(sheet == SettingsSheet.Countries, s, state.knownCountries, actions) { sheet = null }
+    AppPickerSheet(sheet == SettingsSheet.Apps, s, actions) { sheet = null }
     LicencesSheet(sheet == SettingsSheet.Licences) { sheet = null }
     ClearHistorySheet(sheet == SettingsSheet.ClearHistory, state.discoveredCount, actions) { sheet = null }
     DiagnosticsSheet(sheet == SettingsSheet.Diagnostics, state.diagnosis, actions.onDiagnose, onLogs = { sheet = SettingsSheet.Logs }) { sheet = null }
@@ -248,6 +249,7 @@ private val SOURCES_KEYS = arrayOf(
 )
 private val SPLIT_KEYS = arrayOf(
     R.string.settings_split, R.string.settings_iran_direct, R.string.settings_apps, R.string.settings_bypass_lan, R.string.kw_split,
+    R.string.settings_choose_apps,
 )
 private val SHARE_KEYS = arrayOf(R.string.settings_share, R.string.settings_share_toggle, R.string.settings_share_auth, R.string.kw_share)
 private val EVASION_KEYS = arrayOf(
@@ -468,7 +470,7 @@ private fun SourcesCard(state: SettingsUiState, q: SettingsQuery, actions: Setti
 }
 
 @Composable
-private fun SplitCard(s: Settings, q: SettingsQuery, reconnect: Boolean, actions: SettingsActions) {
+private fun SplitCard(s: Settings, q: SettingsQuery, reconnect: Boolean, actions: SettingsActions, onApps: () -> Unit) {
     val locale = currentLocale()
     val f = CardFilter(q, R.string.settings_split, R.string.kw_split)
     SettingsCard(ZeroIcons.Split, stringResource(R.string.settings_split), reconnect, actions.onReconnect) {
@@ -493,6 +495,14 @@ private fun SplitCard(s: Settings, q: SettingsQuery, reconnect: Boolean, actions
                             },
                         )
                     },
+                )
+            }
+            AnimatedVisibility(s.appFilter != AppFilterMode.All, enter = fadeIn(ZeroMotion.quick()) + expandVertically(ZeroMotion.quickSize()), exit = fadeOut(ZeroMotion.quick()) + shrinkVertically(ZeroMotion.quickSize())) {
+                NavRow(
+                    stringResource(R.string.settings_choose_apps),
+                    onApps,
+                    icon = ZeroIcons.Apps,
+                    value = if (s.filteredApps.isEmpty()) stringResource(R.string.settings_apps_none) else pluralStringResource(R.plurals.apps_selected, s.filteredApps.size, Num.int(s.filteredApps.size, locale)),
                 )
             }
         }

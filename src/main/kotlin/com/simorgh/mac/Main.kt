@@ -39,8 +39,30 @@ fun main() {
     val updater = AppUpdater.get()
     val controller = AppController(runner, repository, settings, updater)
 
+    // Headless-verification affordance: when SIMORGH_TAB names a tab, open the
+    // app straight there with onboarding already done, so screenshots of each
+    // screen can be captured without GUI automation. Inert unless the env is set.
+    runCatching {
+        System.getenv("SIMORGH_TAB")?.let { name ->
+            controller.tab = com.simorgh.mac.ui.shell.Tab.valueOf(name)
+            FirstRun.onboarded = true
+        }
+    }
+
     Runtime.getRuntime().addShutdownHook(Thread {
         runCatching { SystemProxy.restore() }
+        // A live root helper is torn down by the same stop-file contract the
+        // Runner uses for disconnect: no second admin prompt, the daemon
+        // notices the file within one second and exits, taking the engine
+        // with it. Best-effort because the shutdown hook must not hang.
+        runCatching {
+            if (client.usePrivileged) {
+                if (!client.stopFile.exists()) {
+                    client.stopFile.createNewFile()
+                    client.stopFile.setReadable(true, false)
+                }
+            }
+        }
         runCatching { client.stopDaemon() }
     })
 
@@ -65,6 +87,14 @@ fun main() {
         Window(
             onCloseRequest = {
                 // Close = disconnect cleanly, then quit (the tray's "Quit" is the same path).
+                // The root helper is asked to exit through the stop-file
+                // contract so no second admin prompt is needed.
+                runCatching {
+                    if (client.usePrivileged && !client.stopFile.exists()) {
+                        client.stopFile.createNewFile()
+                        client.stopFile.setReadable(true, false)
+                    }
+                }
                 runCatching { com.simorgh.mac.platform.exec("pkill", "-f", "simorghd") }
                 client.stopDaemon()
                 runCatching { SystemProxy.restore() }

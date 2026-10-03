@@ -1,5 +1,6 @@
 package com.simorgh.mac.platform
 
+import com.simorgh.mac.engine.EngineClient
 import com.simorgh.mac.model.ConnState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -65,7 +66,12 @@ object Tray {
     }
 
     private fun statusText(s: ConnState): String = when (s) {
-        is ConnState.Connected -> "Connected via ${s.server.name}"
+        is ConnState.Connected -> {
+            // Mirror Android's status-bar VPN marker: the desktop equivalent
+            // is the menu-bar icon's tooltip and status line.
+            val marker = if (EngineClient.shared.usePrivileged) " (VPN)" else ""
+            "Connected via ${s.server.name}$marker"
+        }
         is ConnState.Searching -> "Searching…"
         is ConnState.Connecting -> "Connecting…"
         is ConnState.Reconnecting -> "Reconnecting…"

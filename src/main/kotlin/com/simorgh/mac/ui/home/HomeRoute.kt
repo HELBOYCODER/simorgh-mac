@@ -95,6 +95,9 @@ fun HomeRoute() {
             targetSubscriptionDelay = targetSubscription?.bestDelay ?: -1,
             profile = settings.profile,
             race = race,
+            vpnActive = conn is ConnState.Connected &&
+                settings.mode == com.simorgh.mac.model.ConnectionMode.Vpn &&
+                com.simorgh.mac.engine.EngineClient.shared.usePrivileged,
         ),
         onOrbClick = controller::toggle,
         onRetry = {

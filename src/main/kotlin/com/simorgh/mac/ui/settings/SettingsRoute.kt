@@ -56,6 +56,9 @@ fun SettingsRoute() {
     val diagnosis by controller.engine.diagnosis.collectAsState()
 
     SettingsScreen(
+        initialSheet = runCatching {
+            System.getenv("SIMORGH_SHEET")?.uppercase()?.let { SettingsSheet.valueOf(it) }
+        }.getOrNull(),
         state = SettingsUiState(
             settings = settings,
             connected = connected,
