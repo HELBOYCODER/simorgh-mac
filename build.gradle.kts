@@ -55,7 +55,8 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
             packageName = "Simorgh"
-            packageVersion = "0.1.0"
+            // Compose Desktop packaging needs MAJOR>0; the product version stays 0.1.0 (BuildConfig).
+            packageVersion = "1.0.0"
             vendor = "simorgh"
             description = "Simorgh - censorship circumvention client for macOS"
             appResourcesRootDir = project.layout.projectDirectory.dir("app-resources")

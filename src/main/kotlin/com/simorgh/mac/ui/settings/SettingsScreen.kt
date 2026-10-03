@@ -1,5 +1,6 @@
 package com.simorgh.mac.ui.settings
 
+import com.simorgh.mac.str.pluralStringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
@@ -110,7 +111,7 @@ import dev.chrisbanes.haze.rememberHazeState
 
 enum class SettingsCardId { Connection, Sources, Split, Share, Evasion, Appearance, Privacy, Diagnostics, About }
 
-enum class SettingsSheet { ConnectionMore, Sources, Countries, Apps, Licences, ClearHistory, Diagnostics, Logs }
+enum class SettingsSheet { ConnectionMore, Sources, Countries, Licences, ClearHistory, Diagnostics, Logs }
 
 @Immutable
 data class SettingsUiState(
@@ -163,7 +164,7 @@ fun SettingsScreen(
     val scrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 8 } }
     var queryText by rememberSaveable { mutableStateOf(initialQuery) }
     var sheet by rememberSaveable { mutableStateOf(initialSheet) }
-    val index = remember(context) { SettingsSearchIndex(context) }
+    val index = remember(context) { SettingsSearchIndex() }
     val q = remember(queryText, index) { SettingsQuery(queryText, index) }
     val s = state.settings
     val status = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -205,7 +206,7 @@ fun SettingsScreen(
                         when (id) {
                             SettingsCardId.Connection -> ConnectionCard(s, q, reconnect, actions) { sheet = SettingsSheet.ConnectionMore }
                             SettingsCardId.Sources -> SourcesCard(state, q, actions, onManage = { sheet = SettingsSheet.Sources }, onCountries = { sheet = SettingsSheet.Countries })
-                            SettingsCardId.Split -> SplitCard(s, q, reconnect, actions) { sheet = SettingsSheet.Apps }
+                            SettingsCardId.Split -> SplitCard(s, q, reconnect, actions)
                             SettingsCardId.Share -> ShareCard(state, q, actions)
                             SettingsCardId.Evasion -> EvasionCard(s, q, reconnect, actions)
                             SettingsCardId.Appearance -> AppearanceCard(state, q, actions)
@@ -227,7 +228,6 @@ fun SettingsScreen(
     ConnectionMoreSheet(sheet == SettingsSheet.ConnectionMore, s, SettingsCardId.Connection in state.reconnectCards, actions) { sheet = null }
     SourcesSheet(sheet == SettingsSheet.Sources, s, state.subscriptions, actions) { sheet = null }
     CountriesSheet(sheet == SettingsSheet.Countries, s, state.knownCountries, actions) { sheet = null }
-    AppPickerSheet(sheet == SettingsSheet.Apps, s, actions) { sheet = null }
     LicencesSheet(sheet == SettingsSheet.Licences) { sheet = null }
     ClearHistorySheet(sheet == SettingsSheet.ClearHistory, state.discoveredCount, actions) { sheet = null }
     DiagnosticsSheet(sheet == SettingsSheet.Diagnostics, state.diagnosis, actions.onDiagnose, onLogs = { sheet = SettingsSheet.Logs }) { sheet = null }
@@ -236,33 +236,33 @@ fun SettingsScreen(
 
 // ------------------------------------------------------------------ search keys
 
-private val CONNECTION_KEYS = intArrayOf(
+private val CONNECTION_KEYS = arrayOf(
     R.string.settings_connection, R.string.settings_mode, R.string.settings_mode_vpn, R.string.settings_mode_proxy,
     R.string.settings_autoconnect, R.string.settings_autoswitch, R.string.settings_more_connection,
     R.string.settings_kill_switch, R.string.settings_kill_switch_app, R.string.trusted_title,
     R.string.settings_ipv6, R.string.settings_mtu, R.string.kw_connection,
 )
-private val SOURCES_KEYS = intArrayOf(
+private val SOURCES_KEYS = arrayOf(
     R.string.settings_sources_card, R.string.settings_sources, R.string.settings_preferred_countries,
     R.string.settings_refresh, R.string.settings_subscriptions, R.string.kw_sources,
 )
-private val SPLIT_KEYS = intArrayOf(
+private val SPLIT_KEYS = arrayOf(
     R.string.settings_split, R.string.settings_iran_direct, R.string.settings_apps, R.string.settings_bypass_lan, R.string.kw_split,
 )
-private val SHARE_KEYS = intArrayOf(R.string.settings_share, R.string.settings_share_toggle, R.string.settings_share_auth, R.string.kw_share)
-private val EVASION_KEYS = intArrayOf(
+private val SHARE_KEYS = arrayOf(R.string.settings_share, R.string.settings_share_toggle, R.string.settings_share_auth, R.string.kw_share)
+private val EVASION_KEYS = arrayOf(
     R.string.settings_evasion, R.string.settings_evasion_level, R.string.settings_block_quic,
     R.string.settings_remote_dns, R.string.settings_block_ads, R.string.kw_evasion,
 )
-private val APPEARANCE_KEYS = intArrayOf(
+private val APPEARANCE_KEYS = arrayOf(
     R.string.settings_appearance, R.string.settings_palette, R.string.settings_theme_mode, R.string.settings_amoled,
     R.string.settings_dynamic, R.string.settings_language, R.string.settings_motion, R.string.kw_appearance,
 )
-private val PRIVACY_KEYS = intArrayOf(R.string.settings_privacy, R.string.settings_logs, R.string.settings_share_results, R.string.settings_clear_history, R.string.kw_privacy)
-private val DIAGNOSTICS_KEYS = intArrayOf(
+private val PRIVACY_KEYS = arrayOf(R.string.settings_privacy, R.string.settings_logs, R.string.settings_share_results, R.string.settings_clear_history, R.string.kw_privacy)
+private val DIAGNOSTICS_KEYS = arrayOf(
     R.string.settings_diagnostics, R.string.settings_diag_test, R.string.settings_diag_logs, R.string.logs_title, R.string.kw_diagnostics,
 )
-private val ABOUT_KEYS = intArrayOf(R.string.settings_about, R.string.settings_version, R.string.settings_licences, R.string.settings_engine, R.string.kw_about)
+private val ABOUT_KEYS = arrayOf(R.string.settings_about, R.string.settings_version, R.string.settings_licences, R.string.settings_engine, R.string.kw_about)
 
 private fun cardVisible(id: SettingsCardId, q: SettingsQuery, state: SettingsUiState): Boolean = when (id) {
     SettingsCardId.Connection -> q.hit(*CONNECTION_KEYS)
@@ -277,9 +277,9 @@ private fun cardVisible(id: SettingsCardId, q: SettingsQuery, state: SettingsUiS
 }
 
 /** Whether a row shows: everything when the card's own title (or its keywords) match, otherwise only matching rows. */
-private class CardFilter(private val q: SettingsQuery, titleRes: Int, keywordRes: Int) {
+private class CardFilter(private val q: SettingsQuery, titleRes: String, keywordRes: String) {
     private val all = q.isEmpty || q.hit(titleRes, keywordRes)
-    fun show(vararg ids: Int): Boolean = all || q.hit(*ids)
+    fun show(vararg ids: String): Boolean = all || q.hit(*ids)
 }
 
 // ------------------------------------------------------------------ card chrome
@@ -468,7 +468,7 @@ private fun SourcesCard(state: SettingsUiState, q: SettingsQuery, actions: Setti
 }
 
 @Composable
-private fun SplitCard(s: Settings, q: SettingsQuery, reconnect: Boolean, actions: SettingsActions, onApps: () -> Unit) {
+private fun SplitCard(s: Settings, q: SettingsQuery, reconnect: Boolean, actions: SettingsActions) {
     val locale = currentLocale()
     val f = CardFilter(q, R.string.settings_split, R.string.kw_split)
     SettingsCard(ZeroIcons.Split, stringResource(R.string.settings_split), reconnect, actions.onReconnect) {
@@ -493,14 +493,6 @@ private fun SplitCard(s: Settings, q: SettingsQuery, reconnect: Boolean, actions
                             },
                         )
                     },
-                )
-            }
-            AnimatedVisibility(s.appFilter != AppFilterMode.All, enter = fadeIn(ZeroMotion.quick()) + expandVertically(ZeroMotion.quickSize()), exit = fadeOut(ZeroMotion.quick()) + shrinkVertically(ZeroMotion.quickSize())) {
-                NavRow(
-                    stringResource(R.string.settings_choose_apps),
-                    onApps,
-                    icon = ZeroIcons.Apps,
-                    value = if (s.filteredApps.isEmpty()) stringResource(R.string.settings_apps_none) else pluralStringResource(R.plurals.apps_selected, s.filteredApps.size, Num.int(s.filteredApps.size, locale)),
                 )
             }
         }
@@ -874,7 +866,7 @@ private fun PaletteSwatch(p: Palette, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-fun paletteName(p: Palette): Int = when (p) {
+fun paletteName(p: Palette): String = when (p) {
     Palette.GoldenDark -> R.string.palette_golden
     Palette.Nightshade -> R.string.palette_nightshade
     Palette.Arctic -> R.string.palette_arctic

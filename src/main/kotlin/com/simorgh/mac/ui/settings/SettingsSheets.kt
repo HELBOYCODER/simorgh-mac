@@ -1,8 +1,6 @@
 package com.simorgh.mac.ui.settings
 
-import android.content.Intent
-import android.content.pm.PackageManager
-import androidx.compose.foundation.Image
+import com.simorgh.mac.str.pluralStringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,8 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import com.simorgh.mac.str.LocalContext
 import com.simorgh.mac.str.stringResource
 import androidx.compose.ui.semantics.Role
@@ -54,7 +50,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
 import com.simorgh.mac.R
 import com.simorgh.mac.data.Sources
 import com.simorgh.mac.data.Subscription
@@ -424,112 +419,6 @@ private fun CheckMark(checked: Boolean) {
     }
 }
 
-// ------------------------------------------------------------------ apps
-
-@Immutable
-private data class AppEntry(val pkg: String, val label: String)
-
-/** Launchable apps (the manifest's <queries> allows exactly these), sorted by name. */
-private fun loadApps(pm: PackageManager, self: String): List<AppEntry> {
-    val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-    val infos = if (true) {
-        pm.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(0))
-    } else {
-        @Suppress("DEPRECATION")
-        pm.queryIntentActivities(intent, 0)
-    }
-    return infos
-        .map { AppEntry(it.activityInfo.packageName, it.loadLabel(pm).toString()) }
-        .filter { it.pkg != self }
-        .distinctBy { it.pkg }
-        .sortedBy { it.label.lowercase() }
-}
-
-/** Choose which apps go through (or around) the VPN. */
-@Composable
-fun AppPickerSheet(visible: Boolean, s: Settings, actions: SettingsActions, onDismiss: () -> Unit) {
-    val title = stringResource(R.string.settings_choose_apps)
-    ZeroSheet(visible = visible, onDismiss = onDismiss, title = title) {
-        val c = ZeroTheme.colors
-        val context = LocalContext.current
-        val apps by produceState<List<AppEntry>?>(null, visible) {
-            if (visible && value == null) value = withContext(Dispatchers.IO) { runCatching { loadApps(context.packageManager, context.packageName) }.getOrDefault(emptyList()) }
-        }
-        var query by rememberSaveable { mutableStateOf("") }
-        SheetHeader(
-            title,
-            stringResource(
-                if (s.appFilter == com.simorgh.mac.model.AppFilterMode.OnlySelected) R.string.apps_body_only else R.string.apps_body_except,
-            ),
-        )
-        ZeroTextField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = stringResource(R.string.apps_search),
-            leading = ZeroIcons.Search,
-            clearLabel = stringResource(R.string.action_clear),
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-        Spacer(Modifier.height(8.dp))
-        val list = apps
-        if (list == null) {
-            Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
-            }
-            return@ZeroSheet
-        }
-        val shown = remember(list, query, s.filteredApps) {
-            val q = query.trim().lowercase()
-            // Selected apps first, so the current choice is visible without scrolling.
-            list.filter { q.isEmpty() || it.label.lowercase().contains(q) || it.pkg.contains(q) }
-                .sortedBy { if (it.pkg in s.filteredApps) 0 else 1 }
-        }
-        LazyColumn(Modifier.weight(1f, fill = false), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
-            items(shown, key = { it.pkg }, contentType = { "app" }) { app ->
-                val checked = app.pkg in s.filteredApps
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 60.dp)
-                        .clip(RowShape)
-                        .toggleable(checked, role = Role.Checkbox) { on ->
-                            actions.onChange { st -> st.copy(filteredApps = if (on) st.filteredApps + app.pkg else st.filteredApps - app.pkg) }
-                        }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    AppIcon(app.pkg)
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(app.label, style = MaterialTheme.typography.bodyLarge, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(app.pkg, style = MaterialTheme.typography.bodySmall, color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    CheckMark(checked)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AppIcon(pkg: String) {
-    val context = LocalContext.current
-    val c = ZeroTheme.colors
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val px = with(density) { 36.dp.roundToPx() }
-    val icon by produceState<ImageBitmap?>(null, pkg) {
-        value = withContext(Dispatchers.IO) {
-            runCatching { context.packageManager.getApplicationIcon(pkg).toBitmap(px, px).asImageBitmap() }.getOrNull()
-        }
-    }
-    val b = icon
-    if (b != null) {
-        Image(b, contentDescription = null, modifier = Modifier.size(36.dp))
-    } else {
-        Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(c.surfaceHi))
-    }
-}
-
 // ------------------------------------------------------------------ licences
 
 private data class Licence(val name: String, val licence: String, val asset: String)
@@ -563,7 +452,7 @@ fun LicencesSheet(visible: Boolean, onDismiss: () -> Unit) {
         } else {
             val text by produceState<String?>(null, asset) {
                 value = withContext(Dispatchers.IO) {
-                    runCatching { context.assets.open("licenses/$asset").bufferedReader().use { it.readText() } }.getOrDefault("")
+                    runCatching { assetStream("licenses/$asset").bufferedReader().use { it.readText() } }.getOrDefault("")
                 }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -623,3 +512,8 @@ fun ClearHistorySheet(visible: Boolean, discoveredCount: Int, actions: SettingsA
         }
     }
 }
+
+/** Resources packaged with the app (formerly Android assets). */
+private fun assetStream(path: String): java.io.InputStream =
+    object {}.javaClass.classLoader.getResourceAsStream(path)
+        ?: throw java.io.FileNotFoundException(path)

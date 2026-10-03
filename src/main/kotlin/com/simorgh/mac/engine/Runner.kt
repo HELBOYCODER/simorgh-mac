@@ -113,7 +113,7 @@ class Runner(
     private val _serversChanged = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val serversChanged: SharedFlow<Unit> = _serversChanged.asSharedFlow()
 
-    private var target = ConnectTarget.Fastest
+    private var target: ConnectTarget = ConnectTarget.Fastest
     private var running = false
     private var since = 0L
     private val pool = ArrayList<Alive>()
@@ -963,6 +963,6 @@ class Runner(
 
     fun diagnose() {
         if (diagJob?.isActive == true) return
-        diagJob = scope.launch { com.simorgh.mac.platform.Diagnostics.run(this@Runner) }
+        diagJob = scope.launch { com.simorgh.mac.platform.Diagnostics.diagnose(this@Runner) }
     }
 }

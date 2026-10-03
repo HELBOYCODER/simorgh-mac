@@ -222,7 +222,7 @@ private fun routeDestination(state: HomeState): String? {
     return code?.takeIf { it.length == 2 }
 }
 
-private fun orbLabel(conn: ConnState): Int = when (conn) {
+private fun orbLabel(conn: ConnState): String = when (conn) {
     ConnState.Idle -> R.string.orb_connect
     is ConnState.Connected -> R.string.orb_connected
     is ConnState.Failed -> R.string.orb_failed
@@ -289,8 +289,8 @@ private fun StatusLine(state: HomeState, onRetry: () -> Unit, modifier: Modifier
             } ?: stringResource(R.string.stage_connecting)
             is ConnState.Reconnecting -> stringResource(
                 when (conn.reason) {
-                    com.simorgh.mac.service.Engine.REASON_CHOSEN_DOWN -> R.string.stage_chosen_down
-                    com.simorgh.mac.service.Engine.REASON_BLOCKED -> R.string.stage_blocked
+                    com.simorgh.mac.engine.EngineConst.REASON_CHOSEN_DOWN -> R.string.stage_chosen_down
+                    com.simorgh.mac.engine.EngineConst.REASON_BLOCKED -> R.string.stage_blocked
                     else -> R.string.stage_reconnecting
                 },
             )

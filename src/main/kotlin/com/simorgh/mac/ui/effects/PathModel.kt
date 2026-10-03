@@ -2,7 +2,7 @@ package com.simorgh.mac.ui.effects
 
 import com.simorgh.mac.model.CheckStatus
 import com.simorgh.mac.model.DiagCheck
-import com.simorgh.mac.service.Diagnostics
+import com.simorgh.mac.platform.Diagnostics
 
 /**
  * The connection test as a path: the phone, the provider, the filter and the

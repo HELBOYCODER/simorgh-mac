@@ -1081,6 +1081,8 @@ fun pluralStringResource(id: String, vararg args: Any?): String = pluralStr(id, 
 class Ctx {
     fun getString(id: String, vararg args: Any?): String = str(id, *args)
     fun getString(id: String, count: Int, vararg args: Any?): String = pluralStr(id, count, *args)
+    /** Desktop stand-in for Android's per-app files dir. */
+    val filesDir: java.io.File get() = com.simorgh.mac.Paths.dataDir
 }
 
 val LocalContext = androidx.compose.runtime.staticCompositionLocalOf { Ctx() }

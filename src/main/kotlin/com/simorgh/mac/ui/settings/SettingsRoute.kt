@@ -1,10 +1,9 @@
 package com.simorgh.mac.ui.settings
 
 import com.simorgh.mac.str.Ctx as Context
-import android.net.ConnectivityManager
-import android.net.Network
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,7 +31,7 @@ private val RECONNECT_FIELDS: Map<SettingsCardId, (Settings) -> Any> = mapOf(
 @Composable
 fun SettingsRoute() {
     val controller = LocalController.current
-    val resources = androidx.compose.ui.platform.LocalResources.current
+    val resources = LocalContext.current
     val settings by controller.settings.settings.collectAsState()
     val conn by controller.engine.state.collectAsState()
     val servers by controller.servers.servers.collectAsState()
@@ -109,21 +108,15 @@ fun SettingsRoute() {
  */
 @Composable
 private fun rememberLanAddresses(enabled: Boolean): List<String> {
-    val context = LocalContext.current
     var generation by remember { mutableIntStateOf(0) }
-    DisposableEffect(enabled, context) {
-        if (!enabled) return@DisposableEffect onDispose { }
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-        val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) { generation++ }
-            override fun onLost(network: Network) { generation++ }
-            override fun onLinkPropertiesChanged(network: Network, lp: android.net.LinkProperties) { generation++ }
+    LaunchedEffect(enabled) {
+        while (enabled) {
+            generation++
+            kotlinx.coroutines.delay(5_000)
         }
-        val registered = cm != null && runCatching { cm.registerDefaultNetworkCallback(callback) }.isSuccess
-        onDispose { if (registered) runCatching { cm.unregisterNetworkCallback(callback) } }
     }
     val addresses by produceState(emptyList<String>(), enabled, generation) {
-        value = if (enabled) withContext(Dispatchers.IO) { LanAddresses.list() } else emptyList()
+        value = if (enabled) withContext(Dispatchers.IO) { com.simorgh.mac.data.LanAddresses.list() } else emptyList()
     }
     return addresses
 }

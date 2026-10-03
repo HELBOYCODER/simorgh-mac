@@ -192,8 +192,6 @@ object Diagnostics {
         is java.net.ConnectException -> "connection refused or unreachable"
         else -> "${error.javaClass.simpleName}: ${error.message.orEmpty().take(80)}"
     }
-}
-
     // ------------------------------------------------ orchestration (desktop)
 
     /**
@@ -202,7 +200,7 @@ object Diagnostics {
      * whether the local proxy carries traffic, and which server families
      * answer right now with the saved servers.
      */
-    suspend fun run(runner: com.simorgh.mac.engine.Runner) {
+    suspend fun diagnose(runner: com.simorgh.mac.engine.Runner) {
         val families = com.simorgh.mac.model.ServerKind.entries
         val ids = buildList {
             add(NETWORK); add(INTERNET); add(DNS); add(TLS)
@@ -216,8 +214,8 @@ object Diagnostics {
         }
         runner.setDiagnosis(com.simorgh.mac.model.Diagnosis(running = true, checks = checks))
         try {
-            val active = java.net.NetworkInterface.networkInterfaces().asSequence()
-                .firstOrNull { it.isUp() && !it.isLoopback && it.interfaceAddresses.any { a -> a.address is java.net.Inet4Address && !a.address.isLoopbackAddress } }
+            val active = java.net.NetworkInterface.getNetworkInterfaces().toList()
+                .firstOrNull { ni -> ni.isUp && !ni.isLoopback && ni.interfaceAddresses.any { a -> a.address is java.net.Inet4Address && !a.address.isLoopbackAddress } }
             if (active == null) {
                 set(com.simorgh.mac.model.DiagCheck(NETWORK, com.simorgh.mac.model.CheckStatus.Bad, "no active network interface"))
                 ids.drop(1).forEach { set(com.simorgh.mac.model.DiagCheck(it, com.simorgh.mac.model.CheckStatus.Skipped)) }
@@ -303,3 +301,5 @@ object Diagnostics {
         }
         runner.notifyServersChanged()
     }
+
+}

@@ -1,7 +1,6 @@
 package com.simorgh.mac.ui.home
 
 import com.simorgh.mac.str.Ctx as Context
-import android.telephony.TelephonyManager
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.Locale
@@ -44,9 +43,9 @@ class GlobeData(
         }
 
         private fun read(context: Context): GlobeData {
-            val bytes = context.assets.open("globe/land.bin").use { it.readBytes() }
+            val bytes = assetStream("globe/land.bin").use { it.readBytes() }
             val coast = decodeLand(bytes)
-            val countries = context.assets.open("globe/countries.txt").bufferedReader().useLines { lines ->
+            val countries = assetStream("globe/countries.txt").bufferedReader().useLines { lines ->
                 lines.filter { it.isNotBlank() && !it.startsWith("#") }
                     .mapNotNull { line ->
                         val parts = line.trim().split(' ')
@@ -159,10 +158,9 @@ private val CAPITAL_OVERRIDES = mapOf("IR" to LatLon(35.7f, 51.4f))
  * network (or SIM), falling back to the language region, and to Iran.
  */
 fun userLocation(context: Context, data: GlobeData): LatLon {
-    val tm = context.getSystemService(TelephonyManager::class.java)
     val candidates = listOf(
-        runCatching { tm?.networkCountryIso }.getOrNull(),
-        runCatching { tm?.simCountryIso }.getOrNull(),
+        // No SIM on a Mac: the OS region, then the app's own fallback.
+        System.getProperty("user.country"),
         Locale.getDefault().country,
         "IR",
     )
@@ -174,3 +172,8 @@ fun userLocation(context: Context, data: GlobeData): LatLon {
     }
     return CAPITAL_OVERRIDES.getValue("IR")
 }
+
+/** Resources packaged with the app (formerly Android assets). */
+private fun assetStream(path: String): java.io.InputStream =
+    object {}.javaClass.classLoader.getResourceAsStream(path)
+        ?: throw java.io.FileNotFoundException(path)

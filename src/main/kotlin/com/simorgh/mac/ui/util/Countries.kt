@@ -1,12 +1,11 @@
 package com.simorgh.mac.ui.util
 
-import android.graphics.Paint
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 object Countries {
     private val glyphCache = ConcurrentHashMap<String, Boolean>()
-    private val probe = Paint()
+    private val awtFont = java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.PLAIN, 12)
 
     /** "DE" → 🇩🇪 (two regional-indicator symbols), or "" for anything that is not an ISO alpha-2 code. */
     fun flag(code: String): String {
@@ -25,7 +24,7 @@ object Countries {
     fun canDraw(emoji: String): Boolean {
         if (emoji.isEmpty()) return false
         return glyphCache.getOrPut(emoji) {
-            runCatching { synchronized(probe) { probe.hasGlyph(emoji) } }.getOrDefault(false)
+            runCatching { emoji.codePoints().allMatch { cp -> awtFont.canDisplay(cp) } }.getOrDefault(false)
         }
     }
 

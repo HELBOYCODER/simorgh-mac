@@ -191,7 +191,7 @@ fun PathMap(checks: List<DiagCheck>, modifier: Modifier = Modifier) {
 }
 
 /** The headline for a problem, in the words a person would use. */
-fun headline(problem: Problem): Int = when (problem) {
+fun headline(problem: Problem): String = when (problem) {
     Problem.None -> R.string.path_ok_all
     Problem.NoNetwork -> R.string.path_no_network
     Problem.NoInternet -> R.string.path_no_internet
@@ -202,7 +202,7 @@ fun headline(problem: Problem): Int = when (problem) {
 }
 
 /** What to do or what ZeroNet does about it, or nothing to add. */
-fun action(problem: Problem, finished: Boolean): Int? = if (!finished) null else when (problem) {
+fun action(problem: Problem, finished: Boolean): String? = if (!finished) null else when (problem) {
     Problem.None -> null
     Problem.NoNetwork, Problem.NoInternet -> R.string.path_do_offline
     Problem.Redirected -> R.string.path_do_redirect

@@ -1,42 +1,30 @@
 package com.simorgh.mac.ui.settings
 
-import com.simorgh.mac.str.Ctx as Context
-import android.content.res.Configuration
-import android.content.res.Resources
 import androidx.compose.runtime.Stable
+import com.simorgh.mac.str.Strings
 import java.util.Locale
 
 /**
  * Settings search matches every title and keyword in English and in Persian,
  * whatever the UI language is: a Persian user may type "DNS", an English one
- * may paste a Persian word from a guide.
+ * may paste a Persian word from a guide. The desktop lookup reads the
+ * generated string tables directly instead of Android resource contexts.
  */
 @Stable
-class SettingsSearchIndex(context: Context) {
-    private val sources: List<Resources> = listOf(
-        context.resources,
-        localized(context, Locale.ENGLISH),
-        localized(context, Locale.forLanguageTag("fa")),
-    )
-    private val cache = HashMap<Int, String>()
+class SettingsSearchIndex {
+    private val cache = HashMap<String, String>()
 
-    private fun text(id: Int): String = cache.getOrPut(id) {
-        sources.joinToString("\n") { res -> runCatching { res.getString(id) }.getOrDefault("") }.lowercase(Locale.ROOT)
+    private fun text(id: String): String = cache.getOrPut(id) {
+        (Strings.EN[id].orEmpty() + "\n" + Strings.FA[id].orEmpty()).lowercase(Locale.ROOT)
     }
 
-    fun matches(query: String, ids: IntArray): Boolean {
+    fun matches(query: String, ids: Array<out String>): Boolean {
         val q = normalize(query)
         if (q.isEmpty()) return true
         return ids.any { id -> normalize(text(id)).contains(q) }
     }
 
     companion object {
-        private fun localized(context: Context, locale: Locale): Resources {
-            val config = Configuration(context.resources.configuration)
-            config.setLocale(locale)
-            return context.createConfigurationContext(config).resources
-        }
-
         /** Lower-case, and fold Arabic ي/ك to Persian ی/ک and drop ZWNJ so either keyboard matches. */
         fun normalize(s: String): String = s.trim().lowercase(Locale.ROOT)
             .replace('ي', 'ی').replace('ك', 'ک').replace("‌", "").replace(" ", " ")
@@ -47,5 +35,5 @@ class SettingsSearchIndex(context: Context) {
 @Stable
 class SettingsQuery(val text: String, private val index: SettingsSearchIndex?) {
     val isEmpty: Boolean get() = text.isBlank()
-    fun hit(vararg ids: Int): Boolean = isEmpty || (index?.matches(text, ids) ?: true)
+    fun hit(vararg ids: String): Boolean = isEmpty || (index?.matches(text, ids) ?: true)
 }

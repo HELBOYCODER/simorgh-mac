@@ -73,7 +73,7 @@ class AppController(
     }
 
     init {
-        applyLanguage(settings.current)
+        platform.applyLanguage(settings.current)
         updater.proxyPort = {
             if (engine.state.value is ConnState.Connected) settings.current.httpPort else null
         }
@@ -180,7 +180,7 @@ class AppController(
 
     fun readClipboard(): String = runCatching {
         java.awt.Toolkit.getDefaultToolkit().systemClipboard.getData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String
-    }.getOrDefault("")
+    }.getOrNull().orEmpty()
 }
 
 val LocalController = staticCompositionLocalOf<AppController> { error("No AppController provided") }

@@ -23,8 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import androidx.compose.runtime.remember
+import com.simorgh.mac.str.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.simorgh.mac.R
@@ -51,14 +51,13 @@ import javax.imageio.ImageIO
 @Composable
 fun QrScanner(onResult: (String) -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     val c = ZeroTheme.colors
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var decoding by remember { mutableStateOf(false) }
     var notFound by remember { mutableStateOf(false) }
 
     Column(modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            stringResource(R.string.qr_scan_hint),
+            stringResource(R.string.scan_hint),
             style = MaterialTheme.typography.bodyMedium,
             color = c.text,
             textAlign = TextAlign.Center,
@@ -66,7 +65,7 @@ fun QrScanner(onResult: (String) -> Unit, onCancel: () -> Unit, modifier: Modifi
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             PrimaryButton(
-                label = stringResource(R.string.qr_scan_pick_image),
+                stringResource(R.string.scan_from_photo),
                 onClick = {
                     val file = pickImageFile() ?: return@PrimaryButton
                     decoding = true
@@ -78,7 +77,7 @@ fun QrScanner(onResult: (String) -> Unit, onCancel: () -> Unit, modifier: Modifi
                     }
                 },
             )
-            TonalButton(stringResource(R.string.scanner_cancel), onCancel)
+            TonalButton(stringResource(R.string.update_later), onCancel)
         }
         if (decoding) {
             Spacer(Modifier.height(12.dp))
@@ -87,7 +86,7 @@ fun QrScanner(onResult: (String) -> Unit, onCancel: () -> Unit, modifier: Modifi
         if (notFound) {
             Spacer(Modifier.height(12.dp))
             Text(
-                stringResource(R.string.qr_scan_not_found),
+                stringResource(R.string.scan_not_found),
                 style = MaterialTheme.typography.bodySmall,
                 color = c.err,
                 modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(c.err.copy(alpha = 0.08f)).padding(10.dp),

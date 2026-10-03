@@ -1,6 +1,5 @@
 package com.simorgh.mac.ui.settings
 
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -45,8 +44,8 @@ import com.simorgh.mac.R
 import com.simorgh.mac.model.CheckStatus
 import com.simorgh.mac.model.DiagCheck
 import com.simorgh.mac.model.Diagnosis
-import com.simorgh.mac.service.Diagnostics
-import com.simorgh.mac.service.EngineLog
+import com.simorgh.mac.platform.Diagnostics
+import com.simorgh.mac.engine.EngineLog
 import com.simorgh.mac.ui.components.Hairline
 import com.simorgh.mac.ui.components.PrimaryButton
 import com.simorgh.mac.ui.components.Segmented
@@ -256,10 +255,10 @@ fun LogsSheet(visible: Boolean, detailed: Boolean, onDismiss: () -> Unit, onCopy
                 TonalButton(
                     stringResource(R.string.logs_share),
                     {
-                        val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                            .putExtra(Intent.EXTRA_SUBJECT, "ZeroNet log")
-                            .putExtra(Intent.EXTRA_TEXT, lines.takeLast(200_000))
-                        runCatching { context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        runCatching {
+                            java.awt.Toolkit.getDefaultToolkit().systemClipboard
+                                .setContents(java.awt.datatransfer.StringSelection(lines.takeLast(200_000)), null)
+                        }
                     },
                     icon = ZeroIcons.Share,
                     enabled = lines.isNotEmpty(),

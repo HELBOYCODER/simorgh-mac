@@ -139,11 +139,11 @@ class ServerStore private constructor() {
 
     @Synchronized fun inSubscription(id: String): List<Server> =
         servers.values.filter { it.source == Server.SOURCE_SUB_PREFIX + id }
-            .sortedWith(compareBy({ if (it.delayMs < 0) 1 else 0 }.thenBy { if (it.delayMs < 0) Int.MAX_VALUE else it.delayMs }))
+            .sortedWith(compareBy<Server> { if (it.delayMs < 0) 1 else 0 }.thenBy { if (it.delayMs < 0) Int.MAX_VALUE else it.delayMs })
 
     @Synchronized fun inCountry(code: String): List<Server> =
         servers.values.filter { it.country == code }
-            .sortedWith(compareBy({ if (it.delayMs < 0) 1 else 0 }.thenBy { if (it.delayMs < 0) Int.MAX_VALUE else it.delayMs }))
+            .sortedWith(compareBy<Server> { if (it.delayMs < 0) 1 else 0 }.thenBy { if (it.delayMs < 0) Int.MAX_VALUE else it.delayMs })
 
     @Synchronized fun historyLinks(network: String, limit: Int): List<String> =
         history[network]?.entries?.filter { servers[it.key]?.excluded != true }

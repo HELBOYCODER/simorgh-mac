@@ -39,15 +39,15 @@ object Tray {
         popup.add(statusItem)
         popup.addSeparator()
         popup.add(toggleItem)
-        popup.add(MenuItem("Open Simorgh") { onOpen() })
+        popup.add(MenuItem("Open Simorgh").apply { addActionListener { onOpen() } })
         popup.addSeparator()
-        popup.add(MenuItem("Quit") { exitProcess() })
+        popup.add(MenuItem("Quit").apply { addActionListener { exitProcess() } })
         val img = image() ?: BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB)
         val icon = TrayIcon(img, "Simorgh", popup).apply {
-            imageAutoSize = true
+            isImageAutoSize = true
             addActionListener { onOpen() }
         }
-        runCatching { Toolkit.getSystemTray().add(icon) }.onFailure { return }
+        runCatching { SystemTray.getSystemTray().add(icon) }.onFailure { return }
         trayIcon = icon
         observe = scope.launch {
             state.collect { s ->

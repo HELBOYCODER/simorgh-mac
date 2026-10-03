@@ -2,24 +2,32 @@ package com.simorgh.mac.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import com.simorgh.mac.R
 
 /**
  * Vazirmatn (variable, OFL-1.1) for both scripts: it carries a full Latin
  * set drawn to sit with the Persian, so mixed text ("Germany · ۱۴۰ ms") keeps
  * one rhythm. Each weight is a named instance of the same file selected via
- * the `wght` axis.
+ * the `wght` axis. On desktop the variable font ships as a classpath resource
+ * (src/main/resources/fonts) and is loaded through the File-based Font API.
  */
+private val vazirmatnFile: java.io.File by lazy {
+    val stream = object {}.javaClass.getResourceAsStream("/fonts/vazirmatn.ttf")
+        ?: throw java.io.FileNotFoundException("fonts/vazirmatn.ttf not on classpath")
+    val tmp = java.io.File.createTempFile("vazirmatn", ".ttf").apply { deleteOnExit() }
+    stream.use { java.nio.file.Files.copy(it, tmp.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING) }
+    tmp
+}
+
 private fun vazir(weight: Int) = Font(
-    resId = R.font.vazirmatn,
-    weight = FontWeight(weight),
+    vazirmatnFile,
+    FontWeight(weight),
     variationSettings = FontVariation.Settings(FontVariation.weight(weight)),
 )
 

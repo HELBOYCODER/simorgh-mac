@@ -131,7 +131,7 @@ class EngineClient {
             .build()
         val response = http.send(request, HttpResponse.BodyHandlers.ofLines())
         if (response.statusCode() != 200) {
-            val bodyText = runCatching { response.body().use { it.sequence().toString() } }.getOrDefault("")
+            val bodyText = runCatching { response.body().use { lines -> lines.map { it }.toString() } }.getOrDefault("")
             throw EngineJobError(bodyText.ifBlank { "job stream HTTP ${response.statusCode()}" })
         }
         response.body().use { lines ->
@@ -167,14 +167,13 @@ class EngineClient {
             .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
             .build()
         return withContext(Dispatchers.IO) {
-            val response = try {
+            val response: HttpResponse<String> = try {
                 http.send(request, HttpResponse.BodyHandlers.ofString())
             } catch (e: Exception) {
                 // A dead daemon mid-call: restart once, then retry.
                 if (!isAlive) {
                     startMutex.withLock { if (!isAlive) ensureStartedLocked() }
-                    val retry = http.send(request, HttpResponse.BodyHandlers.ofString())
-                    JSONObject(retry.body())
+                    http.send(request, HttpResponse.BodyHandlers.ofString())
                 } else throw e
             }
             if (response.statusCode() == 401 || response.statusCode() == 403) {

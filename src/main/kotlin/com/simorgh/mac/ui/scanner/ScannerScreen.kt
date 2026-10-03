@@ -83,7 +83,7 @@ data class ScannerActions(
 fun ScannerScreen(state: ScanState, actions: ScannerActions, modifier: Modifier = Modifier) {
     val c = ZeroTheme.colors
     val context = LocalContext.current
-    val resources = androidx.compose.ui.platform.LocalResources.current
+    val resources = LocalContext.current
     val locale = currentLocale()
     val haze = rememberHazeState()
     val listState = rememberLazyListState()

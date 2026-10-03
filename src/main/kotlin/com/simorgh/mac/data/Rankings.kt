@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlinx.coroutines.launch
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URI
@@ -55,7 +56,7 @@ object Rankings {
         null
     }
 
-    private fun parse(root: JSONObject) {
+    private suspend fun parse(root: JSONObject) {
         relays = root.optJSONArray("relays")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList()
         val out = ArrayList<Entry>()
         val nets = root.optJSONObject("nets") ?: return
@@ -99,7 +100,7 @@ object Rankings {
         JSONObject(File(Paths.dataDir, "rankings.stamp.json").readText()).getLong("generated_at")
     }.getOrDefault(0L)
 
-    private fun loadCache() {
+    private suspend fun loadCache() {
         runCatching {
             val root = JSONObject(cacheFile.readText())
             if (root.optInt("v") == 1) parse(root)
@@ -133,7 +134,7 @@ object Rankings {
                     .map { (s, ms) -> JSONObject().put("id", s.key).put("ok", ms >= 0).put("ms", if (ms < 0) JSONObject.NULL else ms) }),
             )
             .put("clean", JSONArray(clean.take(10).map { (ip, ms) -> JSONObject().put("ip", ip).put("ms", ms) }))
-        kotlinx.coroutines.CoroutineScope(Dispatchers.IO, kotlinx.coroutines.SupervisorJob()).launchQuietly {
+        kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launchQuietly {
             for (relay in relays) {
                 if (!relay.startsWith("https://")) continue
                 val ok = runCatching { httpPost("$relay/v1/report", body.toString()) }.isSuccess
@@ -176,6 +177,6 @@ object Rankings {
     }
 
     private fun kotlinx.coroutines.CoroutineScope.launchQuietly(block: suspend kotlinx.coroutines.CoroutineScope.() -> Unit) {
-        kotlinx.coroutines.launch { runCatching { block() } }
+        launch { runCatching { block() } }
     }
 }

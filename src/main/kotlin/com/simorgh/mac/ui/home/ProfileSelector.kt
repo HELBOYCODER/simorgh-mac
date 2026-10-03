@@ -262,7 +262,7 @@ private fun ConnectionProfile.icon(): ImageVector = when (this) {
     ConnectionProfile.Legacy -> ZeroIcons.Clock
 }
 
-private fun ConnectionProfile.label(): Int = when (this) {
+private fun ConnectionProfile.label(): String = when (this) {
     ConnectionProfile.Normal -> R.string.profile_normal
     ConnectionProfile.Fast -> R.string.profile_fast
     ConnectionProfile.Gaming -> R.string.profile_gaming
@@ -270,14 +270,14 @@ private fun ConnectionProfile.label(): Int = when (this) {
 }
 
 /** The line under the name: Normal says it is the one to pick. */
-private fun ConnectionProfile.tag(): Int = when (this) {
+private fun ConnectionProfile.tag(): String = when (this) {
     ConnectionProfile.Normal -> R.string.profile_tag_normal
     ConnectionProfile.Fast -> R.string.profile_tag_fast
     ConnectionProfile.Gaming -> R.string.profile_tag_gaming
     ConnectionProfile.Legacy -> R.string.profile_tag_legacy
 }
 
-private fun ConnectionProfile.hint(): Int = when (this) {
+private fun ConnectionProfile.hint(): String = when (this) {
     ConnectionProfile.Normal -> R.string.profile_normal_hint
     ConnectionProfile.Fast -> R.string.profile_fast_hint
     ConnectionProfile.Gaming -> R.string.profile_gaming_hint

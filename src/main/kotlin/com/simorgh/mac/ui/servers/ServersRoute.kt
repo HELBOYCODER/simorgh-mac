@@ -16,7 +16,7 @@ import com.simorgh.mac.ui.LocalController
 @Composable
 fun ServersRoute() {
     val controller = LocalController.current
-    val resources = androidx.compose.ui.platform.LocalResources.current
+    val resources = LocalContext.current
     val servers by controller.servers.servers.collectAsState()
     val subscriptions by controller.servers.subscriptions.collectAsState()
     val refreshing by controller.engine.refreshing.collectAsState()
