@@ -71,6 +71,25 @@ class Runner(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("runner"))
     private val mutex = Mutex()
 
+    init {
+        // Android does this from WorkManager and the foreground service; the
+        // desktop has neither, so the runner keeps its own idle heartbeat:
+        // refresh shortly after launch and every 15 minutes while idle, which
+        // is what fills the suggested list and the fastest-server card.
+        scope.launch {
+            while (true) {
+                if (settings.current.autoRefresh && !running && connectJob?.isActive != true &&
+                    System.currentTimeMillis() - lastBackgroundFindAt >= 15 * 60_000
+                ) {
+                    lastBackgroundFindAt = System.currentTimeMillis()
+                    EngineLog.i("idle refresh")
+                    runCatching { refresh() }.onFailure { EngineLog.w("idle refresh failed", it) }
+                }
+                delay(60_000)
+            }
+        }
+    }
+
     // ---- Android Engine.kt constants, verbatim
     private val WANT_ALIVE = 5
     private val STOP_DISCOVERY_AT = 3
@@ -165,6 +184,7 @@ class Runner(
 
     fun connect(t: ConnectTarget = ConnectTarget.decode(settings.current.lastTarget)) {
         if (connectJob?.isActive == true || running) return
+        EngineLog.i("connect: target=$t mode=${settings.current.mode} profile=${settings.current.profile}")
         target = t
         connectJob = scope.launch { runConnection() }
     }
@@ -226,6 +246,7 @@ class Runner(
         for ((step, index) in order.withIndex()) {
             val way = Ladder.rungs[index]
             rung = way
+            EngineLog.i("ladder rung ${step + 1}/${order.size}: ${way.id}")
             publish(ConnState.Searching(DiscoveryProgress(method = way.id)))
             when {
                 way.known -> tried = tryKnownFirst()
@@ -307,7 +328,9 @@ class Runner(
         val stopAt = if (running) BACKGROUND_WANT else stopDiscoveryAt(s.profile)
         var lastReload = 0L
         var pendingReload = false
-        val jobId = runCatching { client.startJob("discover", request) }.getOrNull() ?: return
+        val jobId = runCatching { client.startJob("discover", request) }
+            .onFailure { EngineLog.e("discover startJob failed", it) }
+            .getOrNull() ?: return
         client.jobEvents(jobId).collect { e ->
             if (enough) return@collect
             if (upAt > 0L && pool.isNotEmpty() && System.currentTimeMillis() - upAt > BACKGROUND_SEARCH_MS) return@collect
@@ -689,6 +712,7 @@ class Runner(
     }
 
     private fun fail(reason: FailReason, detail: String) {
+        EngineLog.e("fail: $reason ${detail.take(300)}")
         running = false
         monitorJob?.cancel()
         SystemProxy.restore()

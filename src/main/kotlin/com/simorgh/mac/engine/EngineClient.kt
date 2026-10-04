@@ -304,7 +304,6 @@ class EngineClient {
         val request = HttpRequest.newBuilder(URI("http://127.0.0.1:$port$path"))
             .header("Authorization", "Bearer $token")
             .header("Content-Type", "application/json")
-            .header("Connection", "close")
             .timeout(Duration.ofSeconds(60))
             .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
             .build()
