@@ -51,15 +51,16 @@ fun main() {
 
     Runtime.getRuntime().addShutdownHook(Thread {
         runCatching { SystemProxy.restore() }
-        // A live root helper is torn down by the same stop-file contract the
-        // Runner uses for disconnect: no second admin prompt, the daemon
-        // notices the file within one second and exits, taking the engine
-        // with it. Best-effort because the shutdown hook must not hang.
+        // The root helper daemon deliberately outlives the app (like the
+        // system VPN daemons other clients keep): only the runtime — the
+        // tunnel itself — is stopped here, so the next launch adopts the
+        // idle helper and the admin prompt is once per boot, not once per
+        // session. A reboot clears the helper; the next VPN connect prompts
+        // again.
         runCatching {
             if (client.usePrivileged) {
-                if (!client.stopFile.exists()) {
-                    client.stopFile.createNewFile()
-                    client.stopFile.setReadable(true, false)
+                kotlinx.coroutines.runBlocking {
+                    kotlinx.coroutines.withTimeoutOrNull(1500) { runCatching { client.rpc("stop", org.json.JSONObject()) } }
                 }
             }
         }

@@ -152,59 +152,33 @@ class EngineClient {
      * the dialog or the daemon failed to bind.
      */
     suspend fun startPrivilegedHelper(): Boolean = withContext(Dispatchers.IO) {
-        if (usePrivileged && isPortOpen() && tunTokenFile.isFile && tunTokenFile.length() > 0) {
-            token = tunTokenFile.readText().trim()
-            port = TUN_PORT
-            return@withContext true
+        // A healthy root daemon already listening (kept from an earlier
+        // session) is adopted without any prompt at all.
+        if (isPortOpen() && tunTokenFile.isFile && tunTokenFile.length() > 0) {
+            runCatching {
+                token = tunTokenFile.readText().trim()
+                port = TUN_PORT
+                usePrivileged = true
+                return@withContext true
+            }
         }
-        val binary = Paths.bundledTool("simorghd") ?: return@withContext false
+        // The persistent LaunchDaemon helper (Vulpine's mechanism): one
+        // administrator prompt in the app's lifetime, then start_vpn is a
+        // silent file handshake.
         runCatching { tunTokenFile.delete() }
-        runCatching { stopFile.delete() }
-        runCatching { tunLogFile.delete() }
-        val script = File(tunDir, "tun-launch.sh").apply {
-            writeText(
-                """
-                |#!/bin/sh
-                |umask 022
-                |rm -f '${stopFile.absolutePath}' '${tunTokenFile.absolutePath}'
-                |nohup '${binary.absolutePath}' \
-                |  --data-dir '${Paths.dataDir.absolutePath}' \
-                |  --listen 127.0.0.1:$TUN_PORT \
-                |  --token-file '${tunTokenFile.absolutePath}' \
-                |  --stop-file '${stopFile.absolutePath}' \
-                |  >> '${tunLogFile.absolutePath}' 2>&1 </dev/null &
-                |disown 2>/dev/null || true
-                |exit 0
-                |""".trimMargin(),
-            )
-            setExecutable(true, false)
-        }
-        // Tear down the unprivileged child first: its ports are about to be
-        // replaced, and its watchdog would otherwise restart it.
         startMutex.withLock {
             suppressRestart = true
             runCatching { process?.destroy() }
             process = null
             port = -1
         }
-        val prompt = "Simorgh needs administrator access once to open the VPN tunnel."
-        // Escape any embedded backslash or double quote in the path before it
-        // lands inside the AppleScript double-quoted string literal.
-        val safeScriptPath = script.absolutePath.replace("\\", "\\\\").replace("\"", "\\\"")
-        val appleScript = "do shell script \"sh '$safeScriptPath'\" " +
-            "with administrator privileges with prompt \"$prompt\""
-        val proc = runCatching {
-            ProcessBuilder("osascript", "-e", appleScript)
-                .redirectErrorStream(true)
-                .start()
-        }.getOrNull() ?: return@withContext false
-        val finished = proc.waitFor(180, TimeUnit.SECONDS)
-        if (!finished) { runCatching { proc.destroy() }; return@withContext false }
-        if (proc.exitValue() != 0) return@withContext false
-        // The helper writes the token file shortly after binding [TUN_PORT].
-        val deadline = System.currentTimeMillis() + 15_000
+        if (!com.simorgh.mac.platform.SimorghHelper.startVpn()) {
+            suppressRestart = false
+            return@withContext false
+        }
+        val deadline = System.currentTimeMillis() + 20_000
         while (System.currentTimeMillis() < deadline) {
-            if (tunTokenFile.isFile && tunTokenFile.length() > 0 && isPortOpen()) {
+            if (isPortOpen() && tunTokenFile.isFile && tunTokenFile.length() > 0) {
                 token = runCatching { tunTokenFile.readText().trim() }.getOrDefault("")
                 port = TUN_PORT
                 usePrivileged = true
@@ -213,6 +187,7 @@ class EngineClient {
             }
             delay(200)
         }
+        suppressRestart = false
         false
     }
 
@@ -224,19 +199,14 @@ class EngineClient {
      */
     suspend fun stopPrivilegedHelper(): Unit = withContext(Dispatchers.IO) {
         if (!usePrivileged) return@withContext
-        runCatching {
-            if (!stopFile.exists()) {
-                stopFile.createNewFile()
-                stopFile.setReadable(true, false)
-            }
-        }
-        val deadline = System.currentTimeMillis() + 6_000
-        while (System.currentTimeMillis() < deadline && isPortOpen()) delay(200)
+        // Stop the tunnel, keep the daemon: the helper is root and asking
+        // again means another admin prompt. An idle loopback daemon is the
+        // cheaper trade (system VPN daemons work the same way); a reboot
+        // clears it and the next VPN connect prompts once.
+        runCatching { rpc("stop", JSONObject()) }
         usePrivileged = false
         port = -1
         token = ""
-        runCatching { tunTokenFile.delete() }
-        runCatching { stopFile.delete() }
         runCatching { ensureStarted() }
     }
 

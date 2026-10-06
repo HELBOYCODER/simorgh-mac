@@ -200,7 +200,11 @@ class Runner(
                     val server = store.byKey(t.key)
                     if (server == null) { fail(FailReason.ServerUnavailable, ""); return }
                     publish(ConnState.Connecting(server))
-                    pool += Alive(server, server.delayMs)
+                    testAndCollect(listOf(server))
+                    if (pool.isEmpty()) {
+                        fail(FailReason.ServerUnavailable, t.key)
+                        return
+                    }
                     if (!bringUp()) return
                 }
                 is ConnectTarget.Country -> {
@@ -490,6 +494,13 @@ class Runner(
         // utun device (macOS: root). Ask for admin rights once, and after
         // that every RPC routes to the root helper so the tunnel survives
         // without a second prompt (docs/rpc-contract.md "stop-file").
+        if (s.mode != ConnectionMode.Vpn && client.usePrivileged) {
+            // Leaving VPN: hand the session back to the unprivileged child.
+            // Starting a proxy config on the root helper would fight the
+            // tunnel's own listeners while it is still up.
+            EngineLog.i("mode switched off VPN: releasing privileged helper")
+            client.stopPrivilegedHelper()
+        }
         if (s.mode == ConnectionMode.Vpn && !client.usePrivileged) {
             val ok = runCatching { client.startPrivilegedHelper() }.getOrDefault(false)
             if (!ok) {
@@ -501,8 +512,16 @@ class Runner(
                 return@withContext false
             }
         }
-        val err = client.rpc("start", JSONObject().put("config", JSONObject(config)))
+        var err = client.rpc("start", JSONObject().put("config", JSONObject(config)))
             .optString("error").takeIf { it.isNotEmpty() }
+        if (err != null && err.contains("already started")) {
+            // A runtime left up by an earlier session (helper survives app
+            // restarts): stop it once and start clean rather than failing.
+            EngineLog.i("runtime already up: restarting clean")
+            runCatching { client.rpc("stop", JSONObject()) }
+            err = client.rpc("start", JSONObject().put("config", JSONObject(config)))
+                .optString("error").takeIf { it.isNotEmpty() }
+        }
         if (err != null) {
             if (err.contains("requires root")) {
                 fail(
@@ -516,7 +535,30 @@ class Runner(
         }
         running = true
         since = System.currentTimeMillis()
-        if (s.useSystemProxyDesktop) SystemProxy.apply(s.socksPort, s.httpPort)
+        if (s.mode == ConnectionMode.Vpn) {
+            // The browser lives or dies by DNS: names must resolve through
+            // the tunnel's dns-out, not the ISP resolver that dies with it.
+            com.simorgh.mac.platform.SimorghHelper.setDns()
+            val healthy = withContext(Dispatchers.IO) {
+                val deadline = System.currentTimeMillis() + 20_000
+                var ok = false
+                while (System.currentTimeMillis() < deadline && !ok) {
+                    ok = runCatching {
+                        java.net.InetAddress.getByName("connectivitycheck.gstatic.com")
+                    }.isSuccess
+                    if (!ok) delay(1_000)
+                }
+                ok
+            }
+            if (!healthy) {
+                com.simorgh.mac.platform.SimorghHelper.clearDns()
+                runCatching { client.rpc("stop", JSONObject()) }
+                running = false
+                fail(FailReason.NoWorkingServer, "the tunnel carries no DNS")
+                return@withContext false
+            }
+        }
+        if (s.useSystemProxyDesktop) SystemProxy.apply(s.socksPort)
         publishConnected()
         true
     }
@@ -706,6 +748,9 @@ class Runner(
     }
 
     private fun teardown() {
+        if (com.simorgh.mac.platform.SimorghHelper.isInstalled()) {
+            runCatching { com.simorgh.mac.platform.SimorghHelper.clearDns() }
+        }
         running = false
         pool.clear()
         SystemProxy.restore()
@@ -716,6 +761,13 @@ class Runner(
         running = false
         monitorJob?.cancel()
         SystemProxy.restore()
+        // A failed session must never leave the machine black-holed: the
+        // tunnel's split-default routes swallow everything when no live
+        // server carries them. Release the privileged runtime (which drops
+        // the routes) even when the failure came from elsewhere.
+        if (client.usePrivileged) {
+            scope.launch { runCatching { client.stopPrivilegedHelper() } }
+        }
         publish(ConnState.Failed(reason, detail))
     }
 
@@ -969,7 +1021,7 @@ class Runner(
         scope.launch {
             runCatching { client.rpc("set_log_level", JSONObject().put("level", if (settings.current.logs) "info" else "warn")) }
             if (running) {
-                if (settings.current.useSystemProxyDesktop) SystemProxy.apply(settings.current.socksPort, settings.current.httpPort)
+                if (settings.current.useSystemProxyDesktop) SystemProxy.apply(settings.current.socksPort)
                 reloadPool()
             }
             applyLoginItem(settings.current.autoConnect.name)

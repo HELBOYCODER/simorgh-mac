@@ -1,9 +1,12 @@
 package com.simorgh.mac.platform
 
 /**
- * macOS system proxy via `networksetup`, applied on connect and restored on
- * disconnect/quit (Settings switch, default on). Only the active network
- * service is touched; previous state is remembered so restore is exact.
+ * macOS system proxy, following the pattern observed from Vulpine: the only
+ * lever is the SOCKS firewall proxy on the active service, and it is flipped
+ * by the root LaunchDaemon helper (`networksetup` needs admin on this
+ * machine — the direct call fails silently, which is why the proxy appeared
+ * to "grant no access"). The direct path remains as a fallback for machines
+ * where it works unprivileged.
  */
 object SystemProxy {
     /** The service backing the default route: "Wi-Fi", "Thunderbolt Ethernet", … */
@@ -28,24 +31,26 @@ object SystemProxy {
 
     @Volatile private var applied = false
     @Volatile private var socksWasEnabled = false
-    @Volatile private var webWasEnabled = false
 
     private fun isEnabled(vararg args: String): Boolean =
         exec("networksetup", *args).contains("Enabled: Yes")
 
-    fun apply(socksPort: Int, httpPort: Int): Boolean {
+    /** Vulpine's exact shape: SOCKS firewall proxy only, web proxy untouched. */
+    fun apply(socksPort: Int): Boolean {
+        if (!applied) {
+            socksWasEnabled = activeService()?.let {
+                isEnabled("-getsocksfirewallproxy", it)
+            } ?: false
+            applied = true
+        }
+        if (SimorghHelper.isInstalled()) {
+            if (SimorghHelper.startProxy(socksPort)) return true
+        }
         val service = activeService() ?: return false
         return try {
-            if (!applied) {
-                socksWasEnabled = isEnabled("-getsocksfirewallproxy", service)
-                webWasEnabled = isEnabled("-getwebproxy", service)
-                applied = true
-            }
             exec("networksetup", "-setsocksfirewallproxy", service, "127.0.0.1", socksPort.toString())
             exec("networksetup", "-setsocksfirewallproxystate", service, "on")
-            exec("networksetup", "-setwebproxy", service, "127.0.0.1", httpPort.toString())
-            exec("networksetup", "-setwebproxystate", service, "on")
-            true
+            isEnabled("-getsocksfirewallproxy", service)
         } catch (e: Exception) {
             false
         }
@@ -54,8 +59,11 @@ object SystemProxy {
     fun restore() {
         if (!applied) return
         applied = false
+        if (SimorghHelper.isInstalled()) {
+            SimorghHelper.stopProxy()
+            return
+        }
         val service = activeService() ?: return
         exec("networksetup", "-setsocksfirewallproxystate", service, if (socksWasEnabled) "on" else "off")
-        exec("networksetup", "-setwebproxystate", service, if (webWasEnabled) "on" else "off")
     }
 }
